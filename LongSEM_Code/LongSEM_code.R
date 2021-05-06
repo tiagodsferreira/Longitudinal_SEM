@@ -2,6 +2,8 @@
 # author: "Tiago Ferreira"
 
 ## Importação de dados
+choose.files()
+## 
 DF_mood <- read.csv("G:\\My Drive\\FPCEUP\\R trainning\\GitRepo\\Longitudinal SEM\\Longitudinal_SEM\\LongSEM_Data\\df_mood.csv")
 names(DF_mood)
 str(DF_mood)
@@ -14,6 +16,7 @@ psych::describe(DF_mood[ ,1:6])
 library(ggplot2) # se necessário: install.packages("ggplot2")
 DF_pos <- data.frame(var=c(rep("PosAFF_1", 368), rep("PosAFF_2", 368), rep("PosAFF_3", 368)), 
                      value = c(DF_mood$PosAFF11, DF_mood$PosAFF21, DF_mood$PosAFF31))
+
 ggplot(DF_pos, aes(x=value)) +
   geom_histogram(aes(fill=var),color="grey80", binwidth = 0.4) + facet_grid(var~.)
 
@@ -34,12 +37,14 @@ Neg1 =~ NegAFF11 + NegAFF21 + NegAFF31
 fit.5 <- cfa(model.5, data = DF_mood, meanstructure=T)
 summary(fit.5, standardized=TRUE, fit.measures=TRUE, rsquare = TRUE)
 
-fit.5.1 <- cfa(model.5, data = DF_mood, meanstructure=T, std.lv=T)
+fit.5.1 <- cfa(model.5, data = DF_mood, meanstructure=T, std.lv=TRUE)
 summary(fit.5.1, standardized=TRUE, fit.measures=TRUE, rsquare = TRUE)
 
 compareFit(fit.5, fit.5.1, nested = TRUE) 
 
 modindices(fit.5.1, sort.=TRUE, minimum.value=6)
+
+inspect(fit.5)
 
 model.6 <- "
 ## Definir variáveis latentes
@@ -67,13 +72,19 @@ Neg_T2 =~ NegAFF12 + NegAFF22 + NegAFF32
 Neg_T3 =~ NegAFF13 + NegAFF23 + NegAFF33
 				
 # Correlações entre resíduos ao longo do tempo
-PosAFF11 ~~ PosAFF12 + PosAFF13; PosAFF12 ~~ PosAFF13
-PosAFF21 ~~ PosAFF22 + PosAFF23; PosAFF22 ~~ PosAFF23
-PosAFF31 ~~ PosAFF32 + PosAFF33; PosAFF32 ~~ PosAFF33
+PosAFF11 ~~ PosAFF12 + PosAFF13 
+PosAFF12 ~~ PosAFF13
+PosAFF21 ~~ PosAFF22 + PosAFF23
+PosAFF22 ~~ PosAFF23
+PosAFF31 ~~ PosAFF32 + PosAFF33
+PosAFF32 ~~ PosAFF33
 				
-NegAFF11 ~~ NegAFF12 + NegAFF13; NegAFF12 ~~ NegAFF13
-NegAFF21 ~~ NegAFF22 + NegAFF23; NegAFF22 ~~ NegAFF23
-NegAFF31 ~~ NegAFF32 + NegAFF33; NegAFF32 ~~ NegAFF33
+NegAFF11 ~~ NegAFF12 + NegAFF13 
+NegAFF12 ~~ NegAFF13
+NegAFF21 ~~ NegAFF22 + NegAFF23
+NegAFF22 ~~ NegAFF23
+NegAFF31 ~~ NegAFF32 + NegAFF33
+NegAFF32 ~~ NegAFF33
 "
 fit.7 <- cfa(modelo.7, data = DF_mood, meanstructure=T, std.lv=T)
 summary(fit.7, standardized=TRUE, fit.measures=TRUE, rsquare = TRUE)
@@ -222,12 +233,12 @@ summary(fit.9, standardized=TRUE, fit.measures=TRUE, rsquare=TRUE)
 ## STEP 2: Modelo condicionado  
 modelo.10 <- "
 ## média inicial e trajetória linear de crescimento
-intercept =~ 1*NegAFF_T1 + 1*NegAFF_T2 + 1*NegAFF_T3 + 1*NegAFF_T4
-slope =~ 0*NegAFF_T1 + 1*NegAFF_T2 + 2*NegAFF_T3 + 3*NegAFF_T4
+my_intercept =~ 1*NegAFF_T1 + 1*NegAFF_T2 + 1*NegAFF_T3 + 1*NegAFF_T4
+my_slope =~ 0*NegAFF_T1 + 1*NegAFF_T2 + 2*NegAFF_T3 + 3*NegAFF_T4
 
 ## intercepts e médias
-intercept ~ 1
-slope ~ 1
+my_intercept ~ 1
+my_slope ~ 1
 NegAFF_T1 ~ 0*1
 NegAFF_T2 ~ 0*1
 NegAFF_T3 ~ 0*1
@@ -285,14 +296,20 @@ intercept =~ 1*NegAFF_T1 + 1*NegAFF_T2 + 1*NegAFF_T3 + 1*NegAFF_T4
 slope =~ 0*NegAFF_T1 + 1*NegAFF_T2 + 2*NegAFF_T3 + 3*NegAFF_T4
 
 ## intercepts e médias
-intercept ~ 1; slope ~ 1
-NegAFF_T1 ~ 0*1; NegAFF_T2 ~ 0*1; NegAFF_T3 ~ 0*1; NegAFF_T4 ~ 0*1
+intercept ~ 1; 
+slope ~ 1
+NegAFF_T1 ~ 0*1; 
+NegAFF_T2 ~ 0*1; 
+NegAFF_T3 ~ 0*1; 
+NegAFF_T4 ~ 0*1
 
 ## Fixar as variâncias residuais ao mesmo valor
-NegAFF_T1 ~~ res1*NegAFF_T1; NegAFF_T2 ~~ res1*NegAFF_T2; 
-NegAFF_T3 ~~ res1*NegAFF_T3; NegAFF_T4 ~~ res1*NegAFF_T4
+NegAFF_T1 ~~ res1*NegAFF_T1; 
+NegAFF_T2 ~~ res1*NegAFF_T2; 
+NegAFF_T3 ~~ res1*NegAFF_T3; 
+NegAFF_T4 ~~ res1*NegAFF_T4
 
-# Covariáveis
+# regressions
 intercept ~ gender_male + Black + Hispanic
 slope ~ gender_male + Black + Hispanic
 "
@@ -305,6 +322,7 @@ modelo.12 <- "
 ## média inicial e trajetória linear de crescimento
 Neg_intercept =~ 1*NegAFF_T1 + 1*NegAFF_T2 + 1*NegAFF_T3 + 1*NegAFF_T4
 Neg_slope =~ 0*NegAFF_T1 + 1*NegAFF_T2 + 2*NegAFF_T3 + 3*NegAFF_T4
+
 Pos_intercept =~ 1*PosAFF_T1 + 1*PosAFF_T2 + 1*PosAFF_T3 + 1*PosAFF_T4
 Pos_slope =~ 0*PosAFF_T1 + 1*PosAFF_T2 + 2*PosAFF_T3 + 3*PosAFF_T4
 
