@@ -1,0 +1,1232 @@
+---
+title: "Análise de dados longitudinais (Parte 3): Modelos longitudinais"
+author: "Tiago Ferreira"
+date: "Abril, 2022"
+output:
+  ioslides_presentation: 
+    widescreen: true
+  beamer_presentation: default
+  slidy_presentation: default
+---
+
+<style>
+pre {
+    line-height: 1.2em;
+    font-size: 16px;
+}
+</style>
+
+```{r, setup, include=FALSE}
+library("datasets")  
+library("lattice")
+library("psych")
+library("Hmisc")
+library("ggplot2")
+library("knitr")
+library("png")
+library("lavaan")
+library("semTools")
+library("knitr")
+library("kableExtra")
+library(semPlot)
+library(GGally)
+library(tidySEM)
+
+# Some customization.  You can alter or delete as desired (if you know what you are doing).
+knitr::opts_chunk$set(
+  tidy=FALSE,     # display code as typed
+  size="medium")   # slightly smaller font for code
+```  
+
+# AGENDA | Modelos longitudinais:   
+<div class="gray2">
+- **Análise fatorial confirmatória**  
+- **Análise fatorial confirmatória com dados longitudinais**  
+- **Modelos de crescimento latente**  
+</div> 
+
+# Análise fatorial confirmatória (CFA)
+
+
+## CFA e Modelo de medida
+A CFA permite testar se um modelo de medida pré-existente se ajusta aos nossos dados  
+
+* Este modelo representa as relações entre uma ou mais variáveis latentes ou fatores e os seus indicadores observados   
+  
+* A avaliação do modelo de medida através desta técnica é geralmente o primeiro passo da analise de modelos mais complexos  
+  
+* Permite detetar e corrigir problemas com modelo de medida  
+
+*NOTA. Esta técnica (CFA) foi já abordada em módulos anteriores recolhidos num único momento (dados transversais), recorrendo ao AMOS*  
+*No presente módulo apresenta-se a extensão desta técnica a dados longitudinais*  
+
+
+## Importação de dados  
+```{r, echo=TRUE, eval=FALSE, include=FALSE}
+
+## read sufficient statistics from example data file
+mymeans <- scan("C:\\Users\\tiago\\Google Drive\\FPCEUP\\R trainning\\PDPsi\\R crash course_DATA\\L3.MoodLong.dat", skip=0, nlines=1)
+mysds <- scan("C:\\Users\\tiago\\Google Drive\\FPCEUP\\R trainning\\PDPsi\\R crash course_DATA\\L3.MoodLong.dat", skip=1, nlines=1)
+mycors <- scan("C:\\Users\\tiago\\Google Drive\\FPCEUP\\R trainning\\PDPsi\\R crash course_DATA\\L3.MoodLong.dat", skip=2)
+
+
+##push that into correlation matrix, lower triangle
+xindex <- c(0, 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66, 78, 91, 105, 120, 136, 153, 171)
+posaff <- outer(1:18, 1:18, FUN = function(X, Y) ifelse(Y <= X, mycors[Y + xindex[X]], 0))
+
+mynames <- c("PosAFF11", "PosAFF21", "PosAFF31", "NegAFF11", "NegAFF21", "NegAFF31",
+						 "PosAFF12", "PosAFF22", "PosAFF32", "NegAFF12", "NegAFF22", "NegAFF32",
+						 "PosAFF13", "PosAFF23", "PosAFF33", "NegAFF13", "NegAFF23", "NegAFF33")
+colnames(posaff) <- mynames
+rownames(posaff) <- mynames
+?outer
+### now create the covariance matrix
+myvarcov <- outer(mysds, mysds, FUN="*")
+mycov <- posaff * myvarcov
+
+## sample size
+nObs <- 368
+
+## Creating data mood
+library(MASS)
+DB_mood <- mvrnorm(n = nObs, mu = mymeans, Sigma = mycov, empirical = TRUE)
+colMeans(DB_mood)
+cor(DB_mood)
+head(DB_mood)
+
+
+summary(DB_mood)
+class(DB_mood)
+DF_mood <- as.data.frame(DB_mood)
+head(round(DF_mood,2))
+summary(DF_mood)
+
+names(DF_mood)
+DF_mood[,c(1:3, 7:9, 13:15)][DF_mood[, c(1:3, 7:9, 13:15)] < 1] <- 1
+DF_mood[,c(4:6, 10:12, 16:18)][DF_mood[, c(4:6, 10:12, 16:18)] < 0] <- 0
+
+row.names(DF_mood)
+?write.csv
+write.csv(DF_mood, "G:\\My Drive\\FPCEUP\\R trainning\\GitRepo\\Longitudinal SEM\\Longitudinal_SEM\\LongSEM_Data\\df_mood.csv", row.names=FALSE)
+```
+
+Para as análises seguintes recorremos a uma base de dados usada por Todd Little no livro:   
+  - Little, T. (2013). *Longitudinal structural equation modeling*. New York, NY: Guilford Press.  
+
+Este livro é um bom recurso para conhecer e aplicar procedimentos SEM a dados longitudinais    
+
+```{r, out.width = "200px", echo = FALSE}
+knitr::include_graphics("G:\\My Drive\\FPCEUP\\R trainning\\GitRepo\\Longitudinal SEM\\LongSEM_Figures\\Little.jpg")
+```
+
+## Importação de dados
+Podemos importar a base de dados para o R através do seguinte código
+```{r, echo=TRUE}
+DF_mood <- read.csv("G:\\My Drive\\FPCEUP\\R trainning\\GitRepo\\Longitudinal SEM\\Longitudinal_SEM\\LongSEM_Data\\df_mood.csv")
+names(DF_mood)
+```
+
+```{r, eval=FALSE}
+str(DF_mood)
+```
+
+*Esta BD contem dados de 1146 estudantes (50% rapazes) recolhidos em quatro momentos de avaliação, entre o 6º e 9º ano de escolaridade. Foram recolhidos indicadores de humor negativo (e.g., depressão e solidão) e humor positivo (e.g., auto-avaliação positiva e proximidade aos outros)*  
+
+
+## Estatística descritiva  
+```{r}
+library(psych) # se necessário: install.packages("psych")
+psych::describe(DF_mood[ ,1:6])
+```
+
+## Visualização de dados 
+```{r}
+library(ggplot2) # se necessário: install.packages("ggplot2")
+DF_pos <- data.frame(var=c(rep("PosAFF_1", 368), rep("PosAFF_2", 368), rep("PosAFF_3", 368)), 
+                     value = c(DF_mood$PosAFF11, DF_mood$PosAFF21, DF_mood$PosAFF31))
+ggplot(DF_pos, aes(x=value)) +
+  geom_histogram(aes(fill=var),color="grey80", binwidth = 0.4) + facet_grid(var~.)
+```
+
+## Visualização de dados 
+```{r}
+DF_neg <- data.frame(var=c(rep("NegAFF_1", 368), rep("NegAFF_2", 368), rep("NegAFF_3", 368)), 
+                     value = c(DF_mood$NegAFF11, DF_mood$NegAFF21, DF_mood$NegAFF31))
+ggplot(DF_neg, aes(x=value)) +
+  geom_histogram(aes(fill=var),color="grey80", binwidth = 0.4) + facet_grid(var~.)
+```
+
+## Análise Fatorial Confirmatória
+* A CFA permite perceber a confiabilidade das pontuações (i.e., “scores” ou valor) dos itens de um teste  
+  - Precisão com que os itens medem uma determinada variável latente (não observado diretamente)  
+
+* A medição de um determinado constructo nunca é perfeita uma vez que incluí sempre erro de medida. 
+  - O erro é inerente a qualquer instrumento de avaliação  
+  - Logo, uma medição resultante da aplicação desse instrumento não poderá ser considerada o verdadeiro score do constructo que se pretende avaliar. 
+
+
+## Análise Fatorial Confirmatória (cont.) 
+### Teoria clássica dos teste  
+**X = T + E**
+
+X = score observado  
+T = score verdadeiro  
+E = Erro 
+
+Assim, o score resultante de uma determinada avaliação é a soma de duas componentes:     (1) o valor verdadeiro do constructo que pretende avaliar  
+  (2) o erro aleatório de medida
+  
+**Através da CFA podemos perceber estas duas componentes, avaliando assim o contributo do conjunto dos indicadores observados (itens) para a avaliação do construto**
+
+
+## Análise Fatorial Confirmatória (cont.) 
+```{r}
+library(lavaan)# se necessário: install.packages("lavaan")
+library(semPlot)# se necessário: install.packages("semPlot")
+library(semTools)# se necessário: install.packages("semTools")
+```
+Para recapitular, vamos testar de seguida um modelo simples de medida constituído por:  
+  - Duas Variáveis Latentes (VL)    
+  - 3 indicadores ou Variáveis Observadas (VO) por VL  
+  - Dados recolhido num só momento   
+  
+* A função **cfa()** permite estimar o modelo no lavaan
+
+## Análise Fatorial Confirmatória (cont.) 
+Diagrama do modelo  
+  
+```{r, echo=F}
+model.5 <- "
+## Definir variáveis latentes
+Pos1 =~ PosAFF11 + PosAFF21 + PosAFF31
+Neg1 =~ NegAFF11 + NegAFF21 + NegAFF31
+"
+fit.5 <- cfa(model.5, data = DF_mood, meanstructure=T)
+
+semPaths(fit.5, whatLabels="std", title = FALSE, curvePivot = TRUE, layout="tree", intercepts=T, rotation=2, nCharNodes=0, sizeMan=8, residuals=T, exoVar=F, edge.color=9)
+title("Análise Fatorial Confirmatória", line = 3)
+``` 
+
+## Análise Fatorial Confirmatória (cont.) 
+```{r}
+model.5 <- "
+## Definir variáveis latentes
+Pos1 =~ PosAFF11 + PosAFF21 + PosAFF31
+Neg1 =~ NegAFF11 + NegAFF21 + NegAFF31
+"
+fit.5 <- cfa(model.5, data = DF_mood, meanstructure=T)
+```  
+
+* O operador "=~" define que a variável latente **Pos1** é avaliada pelos indicadores **PosAFF11**, **PosAFF21** e **PosAFF31** e que a variável latente **Neg1** é avaliada pelos indicadores **NegAFF11**, **NegAFF21** e **NegAFF31**   
+
+* A correlação entre os dois fatores do modelo, **Pos1** e **Neg1** é especificada por defeito  
+
+## Análise Fatorial Confirmatória (cont.) 
+A função **summary()** permite extrair os resultados da estimação do modelo  
+
+Dois aspetos centrais do output:  
+(1) Indicadores de ajustamento do modelo - verificar que se encontram dentro dos valores referência      
+(2) Pesos fatoriais nos diferentes itens - quanto mais elevados maior a confiabilidade (reliability) do item para medir o constructo  
+
+```{r, eval=FALSE}
+summary(fit.5, standardized=TRUE, fit.measures=TRUE, rsquare = TRUE)
+```
+
+## Análise Fatorial Confirmatória (cont.) 
+### Identificação do modelo  
+* Para que uma qualquer variável latente possa ser identificado, é necessário fixar pelo menos um parâmetro a uma valor de escala  
+  - Determinar a escala consiste em estabelecer um ponto de referência para as medidas do modelo  
+
+* Existem diferentes formas de identificar um modelo:  
+  - Indicador de referência ("marker variable") *(por defeito na maioria dos softwares)*;  
+  - Fixando a variância do fator ("fixed factor");  
+  - Impondo um conjunto de constrangimentos complexos aos loadings do fator ("effects coding")  
+
+## Análise Fatorial Confirmatória (cont.) 
+Os diferentes métodos de identificação conduzem a resultados idênticos no que toca ao ajustamento do modelo  
+
+Diferentes métodos implicam diferenças ao nível da interpretação dos parâmetros do modelo
+
+Identificação pelo Indicador de referência:  
+  - Utilizando arbitrariamente o primeiro indicador como referência, *fixando o seu loading a 1 e o seu intercept a 0*  
+  - A interpretação dos loadings é feita for referência ao primeiro indicador  
+  
+*Uma das limitações apontadas a este método é de que a escala da variável latente é arbitrária dependendo do indicador selecionado como marcador de referência*
+
+
+## Análise Fatorial Confirmatória (cont.) 
+### Identificação alternativa do modelo - fator fixo  
+*Este método fixa a variância do fator a 1, reconhecendo explicitamente que a sua métrica é arbitrária*  
+
+* Este método permite estimar todos os loadings dos fatores nos diferentes indicadores  
+  - *especialmente útil quando pretendemos avaliar a invariância de medida*  
+  
+* Para identificar o modelo fixando a variância do fator, acrescentar o argumento *std.lv=TRUE* na função **cfa()**.
+```{r}
+fit.5.1 <- cfa(model.5, data = DF_mood, meanstructure=T, std.lv=T)
+```  
+
+
+## Análise Fatorial Confirmatória (cont.) 
+```{r, echo=F}
+semPaths(fit.5.1, whatLabels="std", title = FALSE, curvePivot = TRUE, layout="tree", intercepts=T, rotation=2, nCharNodes=0, sizeMan=8, residuals=T, exoVar=F, edge.color=9)
+title("Análise Fatorial Confirmatória", line = 3)
+```  
+
+
+## Análise Fatorial Confirmatória (cont.) 
+Os resultados obtidos pelos dois tipos de modelos são, em quase todos os aspetos, semelhantes
+```{r, eval=FALSE}
+summary(fit.5.1, standardized=TRUE, fit.measures=TRUE, rsquare = TRUE)
+```
+
+## Análise Fatorial Confirmatória (cont.) 
+```{r}
+summary(compareFit(fit.5, fit.5.1, nested = TRUE))
+```
+
+## Análise Fatorial Confirmatória - Re-especificação
+Como anteriormente, usamos a função **modindices()** para perceber a necessidade de fazer alguma alteração no modelo. 
+```{r}
+modindices(fit.5.1, sort.=TRUE, minimum.value=6)
+```
+
+## Análise Fatorial Confirmatória (cont.) 
+Para melhorar o ajustamento do modelo acrescentamos a correlação entre os resíduos dos itens *PosAFF11* e *PosAFF21*
+
+```{r}
+model.6 <- "
+## Definir variáveis latentes
+Pos1 =~ PosAFF11 + PosAFF21 + PosAFF31
+Neg1 =~ NegAFF11 + NegAFF21 + NegAFF31
+
+PosAFF11 ~~ PosAFF21
+"
+fit.6 <- cfa(model.6, data = DF_mood, meanstructure=T, std.lv=T)
+```
+
+## Análise Fatorial Confirmatória (cont.) 
+```{r, echo=F}
+model.6 <- "
+## Definir variáveis latentes
+Pos1 =~ PosAFF11 + PosAFF21 + PosAFF31
+Neg1 =~ NegAFF11 + NegAFF21 + NegAFF31
+
+PosAFF11 ~~ PosAFF21
+"
+fit.6 <- cfa(model.6, data = DF_mood, meanstructure=T, std.lv=T)
+
+semPaths(fit.6, whatLabels="std", title = FALSE, curvePivot = TRUE, layout="tree", intercepts=T, rotation=2, nCharNodes=0, sizeMan=8, residuals=T, exoVar=F, edge.color=9)
+title("Análise Fatorial Confirmatória: modelo alternativo", line = 3)
+```  
+
+## Análise Fatorial Confirmatória (cont.) 
+```{r, eval=FALSE}
+summary(fit.6, standardized=TRUE, fit.measures=TRUE, rsquare = TRUE)
+```  
+
+O modelo re-especificado apresenta um ajustamento significativamente melhor aos dados quando comparado com o modelo original  
+```{r}
+anova(fit.5, fit.6)
+```
+
+```{r, eval=FALSE}
+compareFit(fit.5, fit.6, nested = TRUE) 
+```
+
+
+# Análise fatorial confirmatória com dados longitudinais
+
+## CFA com dados longitudinais
+
+Extensão do modelo CFA antes apresentado  
+
+O seguinte código representa a estrutura fatorial de um modelo com:  
+  - 2 VL, humor positivo e humor negativo  
+  - 3 indicadores por VL  
+  - 3 momentos de avaliação  
+
+Aspeto diferenciador: **correlações entre resíduos dos mesmos indicadores avaliados em momentos diferentes**    
+  - Existência de variabilidade especifica ao item que é partilhada entre os diferentes momentos de avaliação  
+
+*NOTA. Estas correlações devem ser mantidas no modelo mesmo que não sejam significativas*  
+
+## CFA com dados longitudinais (cont.)  
+```{r, echo=F}
+modelo.7 <- "
+# Definir variáveis latentes para os 3 momentos
+Pos_T1 =~ PosAFF11 + PosAFF21 + PosAFF31
+Pos_T2 =~ PosAFF12 + PosAFF22 + PosAFF32
+Pos_T3 =~ PosAFF13 + PosAFF23 + PosAFF33
+
+Neg_T1 =~ NegAFF11 + NegAFF21 + NegAFF31
+Neg_T2 =~ NegAFF12 + NegAFF22 + NegAFF32
+Neg_T3 =~ NegAFF13 + NegAFF23 + NegAFF33
+				
+
+# Correlações entre resíduos ao longo do tempo
+PosAFF11 ~~ PosAFF12 + PosAFF13
+PosAFF12 ~~ PosAFF13
+PosAFF21 ~~ PosAFF22 + PosAFF23
+PosAFF22 ~~ PosAFF23
+PosAFF31 ~~ PosAFF32 + PosAFF33
+PosAFF32 ~~ PosAFF33
+				
+NegAFF11 ~~ NegAFF12 + NegAFF13
+NegAFF12 ~~ NegAFF13
+NegAFF21 ~~ NegAFF22 + NegAFF23
+NegAFF22 ~~ NegAFF23
+NegAFF31 ~~ NegAFF32 + NegAFF33
+NegAFF32 ~~ NegAFF33
+"
+fit.7 <- cfa(modelo.7, data = DF_mood, meanstructure=T, std.lv=T)
+
+semPaths(fit.7, whatLabels="std", title = FALSE, curvePivot = TRUE, layout="tree", intercepts=T, rotation=2, nCharNodes=0, sizeMan=3, sizeLat= 5, residuals=T, exoVar=F, edge.color=9)
+title("Análise Fatorial Confirmatória", line = 2)
+``` 
+
+## CFA com dados longitudinais (cont.)
+A seguinte sintaxe especifica o modelo:  
+  - Como anteriormente, as VL são definidas pelo operador **=~**
+```{r}
+modelo.7 <- "
+# Definir variáveis latentes para os 3 momentos
+Pos_T1 =~ PosAFF11 + PosAFF21 + PosAFF31
+Pos_T2 =~ PosAFF12 + PosAFF22 + PosAFF32
+Pos_T3 =~ PosAFF13 + PosAFF23 + PosAFF33
+
+Neg_T1 =~ NegAFF11 + NegAFF21 + NegAFF31
+Neg_T2 =~ NegAFF12 + NegAFF22 + NegAFF32
+Neg_T3 =~ NegAFF13 + NegAFF23 + NegAFF33
+				
+# Correlações entre resíduos ao longo do tempo
+PosAFF11 ~~ PosAFF12 + PosAFF13; PosAFF12 ~~ PosAFF13
+PosAFF21 ~~ PosAFF22 + PosAFF23; PosAFF22 ~~ PosAFF23
+PosAFF31 ~~ PosAFF32 + PosAFF33; PosAFF32 ~~ PosAFF33
+				
+NegAFF11 ~~ NegAFF12 + NegAFF13; NegAFF12 ~~ NegAFF13
+NegAFF21 ~~ NegAFF22 + NegAFF23; NegAFF22 ~~ NegAFF23
+NegAFF31 ~~ NegAFF32 + NegAFF33; NegAFF32 ~~ NegAFF33
+"
+fit.7 <- cfa(modelo.7, data = DF_mood, meanstructure=T, std.lv=T)
+```
+
+## CFA com dados longitudinais (cont.)
+```{r, eval=FALSE}
+summary(fit.7, standardized=TRUE, fit.measures=TRUE, rsquare = TRUE)
+fitMeasures(fit.7)
+reliability(fit.7)
+semTools::clipboard(fit.7)
+```
+
+
+# CONTEÚDO OPCIONAL | Invariância de medida longitudinal
+
+## IM Longitudinal (OPCIONAL)  
+O modelo anterior serve de base ao teste da invariância de medida (MI)  
+  - Será o modelo de medida equivalente entre grupos ou momentos de avaliação?   
+      *modelos longitudinais assumem o pressuposto da invariância de medida*   
+
+Comparação de modelos aninhados, com um número crescente de parâmetros constrangidos:    
+  1. *Configuracional* - mesma estrutura e variáveis latentes (modelo.7)    
+  2. *Fraca ou Métrica* - loadings dos fatores equivalentes      
+  3. *Forte ou Escalar* - loadings dos fatores e intercepts dos itens equivalentes  
+  4. *Estrita* - loadings dos fatores, intercepts e resíduos dos itens equivalentes  
+
+Para informação acerca de Invariância de Medida ver [link](https://users.ugent.be/~yrosseel/lavaan/multiplegroup6Dec2012.pdf)  
+
+
+## IM Longitudinal (OPCIONAL)  
+A sintaxe seguinte apresenta uma forma possível de testar MI no R  
+  - recorre-se à função **measEq.syntax()** do pacote semTools  
+  
+### Modelo Base (invariância configuracional)
+```{r, eval=F}
+modelo.7 <- "
+# Definir variáveis latentes para os 3 momentos
+Pos_T1 =~ PosAFF11 + PosAFF21 + PosAFF31 
+Pos_T2 =~ PosAFF12 + PosAFF22 + PosAFF32 
+Pos_T3 =~ PosAFF13 + PosAFF23 + PosAFF33
+Neg_T1 =~ NegAFF11 + NegAFF21 + NegAFF31 
+Neg_T2 =~ NegAFF12 + NegAFF22 + NegAFF32 
+Neg_T3 =~ NegAFF13 + NegAFF23 + NegAFF33
+
+# Correlações entre resíduos ao longo do tempo
+PosAFF11 ~~ PosAFF12 + PosAFF13; PosAFF12 ~~ PosAFF13; 
+PosAFF21 ~~ PosAFF22 + PosAFF23; PosAFF22 ~~ PosAFF23; 
+PosAFF31 ~~ PosAFF32 + PosAFF33; PosAFF32 ~~ PosAFF33
+NegAFF11 ~~ NegAFF12 + NegAFF13; NegAFF12 ~~ NegAFF13; 
+NegAFF21 ~~ NegAFF22 + NegAFF23; NegAFF22 ~~ NegAFF23; 
+NegAFF31 ~~ NegAFF32 + NegAFF33; NegAFF32 ~~ NegAFF33
+"
+fit.7 <- cfa(modelo.7, data = DF_mood, meanstructure=T, std.lv=T)
+summary(fit.7, standardized=TRUE, fit.measures=TRUE, rsquare = TRUE)
+```
+
+## IM Longitudinal (OPCIONAL)  
+### Modelo Base (invariância configuracional)
+```{r, eval=FALSE}
+library(semTools)# se necessário: install.packages("semTools")
+?measEq.syntax
+```
+
+```{r, eval=FALSE}
+longFacNames <- list(Pos = c("Pos_T1","Pos_T2", "Pos_T3"), Neg = c("Neg_T1","Neg_T2", "Neg_T3"))
+## configural model: no constraints across groups or repeated measures
+syntax.config <- measEq.syntax(configural.model = modelo.7, data = DF_mood,
+                               ID.fac = "std.lv", longFacNames = longFacNames)
+summary(syntax.config) ## print a summary of model features
+syntax.config <- as.character(syntax.config) # save as text
+configural.fit <- cfa(syntax.config, data = DF_mood, meanstructure=T)
+summary(configural.fit, standardized=TRUE, fit.measures=TRUE, rsquare = TRUE)
+
+compareFit(fit.7, configural.fit) # o mesmo modelo
+```
+
+## IM Longitudinal (OPCIONAL)  
+### Invariância fraca ou métrica (iguais loadings)  
+```{r, eval=FALSE}
+syntax.metric <- measEq.syntax(configural.model = syntax.config, data = DF_mood,
+                               ID.fac = "std.lv", longFacNames = longFacNames,
+                               long.equal  = c("loadings"))
+summary(syntax.metric) # summarize model features
+mod.metric <- as.character(syntax.metric) # save as text
+metric.fit <- cfa(mod.metric, data = DF_mood, meanstructure=T)
+summary(metric.fit, standardized=TRUE, fit.measures=TRUE, rsquare = TRUE)
+
+compareFit(configural.fit, metric.fit)
+```
+
+## IM Longitudinal (OPCIONAL)  
+### Invariância forte ou escalar (iguais loadings e intercepts)  
+```{r, eval=FALSE}
+syntax.scalar <- measEq.syntax(configural.model = syntax.config, data = DF_mood,
+                               ID.fac = "std.lv", longFacNames = longFacNames,
+                               long.equal  = c("loadings", "intercepts"))
+summary(syntax.scalar ) # summarize model features
+mod.scalar <- as.character(syntax.scalar ) # save as text
+scalar.fit <- cfa(mod.scalar, data = DF_mood, meanstructure=T)
+summary(scalar.fit, standardized=TRUE, fit.measures=TRUE, rsquare = TRUE)
+
+compareFit(metric.fit, scalar.fit)
+```
+
+## IM Longitudinal (OPCIONAL)  
+### Invariância estrita (iguais loadings + intercepts + residuals)  
+```{r, eval=FALSE}
+syntax.strict <- measEq.syntax(configural.model = syntax.config, data = DF_mood,
+                               ID.fac = "std.lv", longFacNames = longFacNames,
+                               long.equal  = c("loadings", "intercepts", "residuals"))
+summary(syntax.strict ) # summarize model features
+mod.strict <- as.character(syntax.strict ) # save as text
+strict.fit <- cfa(mod.strict, data = DF_mood, meanstructure=T)
+summary(strict.fit, standardized=TRUE, fit.measures=TRUE, rsquare = TRUE)
+
+compareFit(scalar.fit, strict.fit)
+```
+
+
+# Modelos de crescimento latente (LGC)
+
+## LGC - Introdução  
+Os LGC focam-se primariamente na análise da **trajetória de mudança** que caracteriza um grupo de pessoas numa determinada variável 
+
+Estas trajetórias são caracterizadas de acordo com 2 parâmetros:  
+  (1) Média de crescimento; (2) Variação (variância) inter-individual  
+
+*Sendo possível caracterizar os padrões médios de mudança de um determinado grupo de pessoas, é também útil reconhecer que na maioria das situações diferentes pessoas apresentam padrões de mudança distintos* 
+
+```{r, out.width = "400px", echo = FALSE}
+knitr::include_graphics("G:\\My Drive\\FPCEUP\\R trainning\\GitRepo\\Longitudinal SEM\\LongSEM_Figures\\plot_LGC.jpg")
+```
+
+## LGC - Introdução  
+Os modelos LGC respondem a três questões essenciais (Bollen & Curran, 2006):  
+  
+  - Como se caracteriza a trajetória média de mudança de um grupo de sujeitos numa variável?  
+      *Será que existem mudanças significativas ao longo do tempo e como se podem caracterizar essas mudanças?*  
+        
+  - A trajetória média estimada é suficiente para explicar as mudanças nos diferentes padrões individuais de trajetórias?  
+      *Será que existe variabilidade intra-individual nos níveis iniciais (i.e., intercept) e taxa mudança (i.e., slope)?*  
+  
+  - Se existe variabilidade nas trajetórias individuais, será que podemos recorrer a outras variáveis para explicar essa variabilidade?  
+      *Que variáveis são necessárias para explicar as diferenças individuais (i.e., variância) nos momentos iniciais e trajetórias de mudança?*
+
+
+## Modelos de crescimento latente
+Estes modelos procuram explicar uma variável em função do tempo, descrevendo:  
+  - Nível inicial e trajetória de mudança dos indivíduos  
+  - Diferenças inter-individuais nestes parâmetros
+  
+Oferecem uma forma flexível de testar o valor preditivo de outras variáveis face às trajetórias   
+
+Os modelos LGC podem assumir crescimento linear ou não linear  
+
+```{r, out.width = "300px", echo = FALSE}
+knitr::include_graphics("G:\\My Drive\\FPCEUP\\R trainning\\GitRepo\\Longitudinal SEM\\LongSEM_Figures\\plot_poli.jpg")
+```
+
+
+## Modelos de crescimento latente
+Estes modelos são definido pela seguinte equação multinível:  
+
+**Nível 1 (mudança intraindividual associada ao tempo - within-subject):**  
+$${y_{ti}} = \beta_{0i} + \beta_{1i}x_{ti} + r_{ti}$$
+LEGENDA:  
+  - *i* = indivíduos & *t* = ocasião de medida;  
+  - ${Y_{ti}}$ = score do indivíduo *i* na variável *y* no tempo *t*;  
+  - $x_{ti}$ = variável que define a unidade de tempo;  
+  - $\beta_{0i}$ = o intercept do indivíduo *i*, isto é, o score de *y* no primeiro momento de avaliação, quando *t* é igual a zero;  
+  - $\beta_{1i}$ = a slope do indivíduo *i*, definida pela variável *t*. Corresponde à trajetória de crescimento de cada um dos indivíduos ao longo do tempo;  
+  - $r_{ti}$ = resíduo associado ao score do indivíduo *i* na ocasião *t* - discrepância entre a trajetória individual estimada e o valor observado;
+
+
+## Modelos de crescimento latente  
+**Nível 1 (mudança intraindividual associada ao tempo - within-subject):**  
+$${y_{ti}} = \beta_{0i} + \beta_{1i}x_{ti} + r_{ti}$$
+
+```{r, echo=FALSE, fig.height = 3.5, fig.width = 7}
+dat_x <- data.frame(time=0:4, y=c(2.2,2,2.8,3,4))
+plot(dat_x$time, dat_x$y)
+abline(lm(dat_x$y~dat_x$time))
+```  
+
+
+## Modelos de crescimento latente  
+O tempo pode não explicar todas as diferenças ao nível...  
+- do ponto de partida ($\beta_{0i}$)  
+- da trajetória de mudança ($\beta_{1i}$)  
+
+```{r, out.width = "400px", echo = FALSE}
+knitr::include_graphics("G:\\My Drive\\FPCEUP\\R trainning\\GitRepo\\Longitudinal SEM\\LongSEM_Figures\\plot_LGC.jpg")
+```
+
+Para melhor representar os nossos dados, torna-se necessário integrar no modelo a variabilidade individual tanto ao nível de $\beta_{0i}$ como de $\beta_{1i}$ 
+
+
+## Modelos de crescimento latente  
+### Nível 2 (variação interindividuais, between-subjec): INTERCEPT   
+$$\beta_{0i} = \gamma_{00} + u_{0i}$$
+
+LEGENDA:  
+  - *i* = indivíduos;  
+  - $\beta_{0i}$ = intercept do indivíduo *i*, valor esperado de *Y* quando *t*=0;  
+  - $\gamma_{00}$ = média de todos os intercepts, ou intercept da equação de nível 2 predizendo $\beta_{0i}$, o intercept da equação de nível 1;    
+  - $u_{0i}$ = desvio de cada indivíduo *i* face ao intercept médio ou variância da slope;  
+
+NOTA: a esta equação podem ser acrescentados parâmetros (eg., $\gamma_{10}$, $\gamma_{20}$...) que potencialmente expliquem $\beta_{0i}$
+
+
+## Modelos de crescimento latente  
+### Nível 2 (variação interindividuais, between-subjec): INTERCEPT  
+$$\beta_{0i} = \gamma_{00} + u_{0i}$$
+```{r, echo=FALSE, fig.height = 3.5, fig.width = 7}
+dat_x <- data.frame(time=rep(0:4,5), y=c(jitter(seq(1.0, 5.0,length.out=5)),
+                                         jitter(seq(1.5, 5.5,length.out=5)), 
+                                         jitter(seq(2.0, 6.0,length.out=5), factor=2),
+                                         jitter(seq(3.0, 7.0,length.out=5), factor=3),
+                                         jitter(seq(4.5, 8.5,length.out=5), factor=2)))
+
+plot(dat_x$time, dat_x$y)
+abline(lm(y~time, data=dat_x[1:5,]))
+abline(lm(y~time, data=dat_x[6:10,]))
+abline(lm(y~time, data=dat_x[11:15,]))
+abline(lm(y~time, data=dat_x[16:20,]))
+abline(lm(y~time, data=dat_x[21:26,]))
+abline(lm(y~time, data=dat_x), col="brown", lwd=4)
+```
+
+
+## Modelos de crescimento latente  
+### Nível 2 (variação interindividuais, between-subjec): SLOPE    
+$$\beta_{1i} = \gamma_{10} + u_{1i}$$
+LEGENDA:  
+  - *i* = indivíduos;  
+  - $\beta_{1i}$ = a slope do indivíduo *i*, definida pela variável *t*. Corresponde à trajetória de crescimento de cada um dos indivíduos ao longo do tempo;     
+  - $\gamma_{10}$ = média de todas as slope, ou intercept da equação de nível 2 predizendo $\beta_{1i}$, a slope da equação de nível 1;    
+  - $u_{1i}$ = desvio de cada indivíduo *i* face à slope média ou variância da slope;  
+
+NOTA: a esta equação podem ser acrescentados parâmetros (eg., $\gamma_{10}$, $\gamma_{20}$...) que potencialmente expliquem $\beta_{1i}$
+
+## Modelos de crescimento latente 
+### Nível 2 (variação interindividuais, between-subjec): SLOPE    
+$$\beta_{1i} = \gamma_{10} + u_{1i}$$
+```{r, echo=FALSE, fig.height = 3.5, fig.width = 7}
+dat_x <- data.frame(time=rep(0:4,5), y=c(jitter(seq(3.0, 6.0,length.out=5)),
+                                         jitter(seq(3.0, 5.5,length.out=5)), 
+                                         jitter(seq(3.0, 4.6,length.out=5), factor=2),
+                                         jitter(seq(3.0, 2.8,length.out=5), factor=3),
+                                         jitter(seq(3.0, 2.4,length.out=5), factor=2)))
+
+plot(dat_x$time, dat_x$y)
+abline(lm(y~time, data=dat_x[1:5,]))
+abline(lm(y~time, data=dat_x[6:10,]))
+abline(lm(y~time, data=dat_x[11:15,]))
+abline(lm(y~time, data=dat_x[16:20,]))
+abline(lm(y~time, data=dat_x[21:26,]))
+abline(lm(y~time, data=dat_x), col="brown", lwd=4)
+```
+
+
+## Modelos de crescimento latente
+### Nível 1 e 2 (variação intra e interindividuais): INTERCEPT & SLOPE   
+$${y_{ti}} = (\gamma_{00} + u_{0i}) + (\gamma_{10} + u_{1i})x_{ti} + r_{ti}$$
+$${y_{ti}} = \gamma_{00} + \gamma_{10}x_{ti} + u_{0i} + u_{1i}x_{ti} + r_{ti}$$
+O modelo completo incluí assim 3 componentes de erro:   
+- $r_{ti}$ que corresponde a diferenças intraindividuais (**erro na equação de nível 1**)  
+- $u_{0i}$ e $u_{1i}$ que corresponde a diferenças interindividuais ao nível do intercept e slope (**erros nas equações de nível 2**)  
+
+
+## Modelos de crescimento latente
+
+$${y_{ti}} = \gamma_{00} + \gamma_{10}x_{ti} + u_{0i} + u_{1i}x_{ti} + r_{ti}$$
+
+```{r, echo=FALSE, fig.height = 4.5, fig.width = 7}
+
+dat_x <- data.frame(time=rep(0:4,5), y=c(jitter(seq(2.5, 6,length.out=5)),
+                                         jitter(seq(2, 5.5,length.out=5)), 
+                                         jitter(seq(3, 4.5,length.out=5), factor=2),
+                                         jitter(seq(4, 3,length.out=5), factor=3),
+                                         jitter(seq(1.5, 4.5,length.out=5), factor=2)))
+
+plot(dat_x$time, dat_x$y)
+abline(lm(y~time, data=dat_x[1:5,]))
+abline(lm(y~time, data=dat_x[6:10,]))
+abline(lm(y~time, data=dat_x[11:15,]))
+abline(lm(y~time, data=dat_x[16:20,]))
+abline(lm(y~time, data=dat_x[21:26,]))
+abline(lm(y~time, data=dat_x), col="brown", lwd=4)
+```
+
+
+## Modelos de crescimento latente
+
+A equação da regressão multinível...   
+$${y_{ti}} = \gamma_{00} + \gamma_{10}x_{ti} + u_{0i} + u_{1i}x_{ti} + r_{ti}$$
+...é reproduzida no diagrama SEM para o modelo LGC:     
+
+```{r, out.width = "450px", echo = FALSE}
+knitr::include_graphics("G:\\My Drive\\FPCEUP\\R trainning\\GitRepo\\Longitudinal SEM\\LongSEM_Figures\\LGC_diagram1.jpg")
+```
+
+$${y_{ti}} = \alpha_{1} + \alpha_{2}\lambda_{t2} + \zeta_{1i} + \zeta_{2i}\lambda_{ti} + \varepsilon_{ti}$$
+
+## Modelos de crescimento latente
+A especificação do modelo fica completa com a codificação de tempo (*t* na equação anterior)  
+  - Este codificação irá definir a forma da slope: linear, quadrática, cúbica...  
+
+Codificação **linear** de *t* para 4 ocasiões  
+```{r, out.width = "350px", echo = FALSE}
+knitr::include_graphics("G:\\My Drive\\FPCEUP\\R trainning\\GitRepo\\Longitudinal SEM\\LongSEM_Figures\\LGC_diagram2.jpg")
+```
+
+- Intercept fixado a 1 nas diferentes ocasiões de medida  
+- Slope fixadas a 0, 1, 2 e 3 respetivamente à primeira, segunda, terceira e quarta ocasião de medida  
+
+
+## Modelos de crescimento latente
+
+**O intercept ($\beta_{0i}$)**:  
+ - Loadings fixados a 1 nas quatro ocasiões de medida   
+ - Constante que captura o valor médio de ${y_{ti}}$ quando a variável preditora, neste caso **tempo**, assume o valor de zero.  
+
+**A slope ($\beta_{1i}$)**:  
+ - Loadings são fixados a 0, 1, 2 e 3, respetivamente no tempo 1, 2, 3 e 4    
+ - Esta codificação reflete a linearidade do crescimento latente ao longo dos 4 momentos  
+
+
+## Modelos de crescimento latente - Sumário  
+Os modelos LGC caracterizam as mudanças individuais de acordo com:  
+  - médias do intercept e slope  
+  - variação inter individual  
+  
+Como estes **parâmetros são tratado como variáveis latentes**, podem ser modelados de forma muito flexível 
+
+*De seguida, apresentamos alguns exemplos de como esta modelação pode ser executada com recurso ao R e ao pacote lavaan.*
+
+
+## Especificação, estimação e avaliação de Modelos de Crescimento Latente (LGC) no R    
+Nos exemplos que se seguem recorremos mais uma vez à base de dados apresentada por Todd Little (2013) no seu livro *Longitudinal structural equation modeling*.  
+```{r, echo=TRUE, eval=FALSE, include=FALSE}
+
+DF_LGM <- read.table("C:\\Users\\tiago\\Google Drive\\FPCEUP\\R trainning\\PDPsi\\R crash course_DATA\\L9.Panas.4Wave.dat")
+names(DF_LGM) <- c("PosAFF_T1", "PosAFF_T2", "PosAFF_T3", "PosAFF_T4", "NegAFF_T1", "NegAFF_T2", 
+                   "NegAFF_T3", "NegAFF_T4", "gender_male", "Black", "Hispanic", "Other")
+
+head(DF_LGM)
+
+summary(DF_LGM)
+
+write.csv(DF_LGM, "G:\\My Drive\\FPCEUP\\R trainning\\GitRepo\\Longitudinal SEM\\Longitudinal_SEM\\LongSEM_Data\\lgm.csv", row.names=FALSE)
+
+```
+
+Usamos o código seguinte para importar esta base de dados:  
+```{r}
+DF_LGM <- read.csv("G:\\My Drive\\FPCEUP\\R trainning\\GitRepo\\Longitudinal SEM\\Longitudinal_SEM\\LongSEM_Data\\lgm.csv")
+```
+
+* Algumas características desta base de dados  
+```{r, eval=FALSE}
+names(DF_LGM)
+class(DF_LGM)
+str(DF_LGM)
+```
+
+## Estatística descritiva  
+```{r}
+library(psych) # se necessário: install.packages("psych")
+psych::describe(DF_LGM[ ,1:8])
+```
+
+## Estatística descritiva  
+```{r, fig.height = 3, fig.width = 7}
+#Visualização de dados 
+library(ggplot2) # se necessário: install.packages("ggplot2")
+
+DF_pos <- data.frame(var=c(rep("PosAFF_T1", nrow(DF_LGM)), rep("PosAFF_T2", nrow(DF_LGM)), 
+                           rep("PosAFF_T3", nrow(DF_LGM)), rep("PosAFF_T4", nrow(DF_LGM))), 
+                     value = c(DF_LGM$PosAFF_T1, DF_LGM$PosAFF_T2, DF_LGM$PosAFF_T3, DF_LGM$PosAFF_T4))
+ggplot(DF_pos, aes(x=var,y=value, fill=var)) +
+  geom_boxplot() +
+  geom_jitter(width=0.08, alpha=0.03)
+```
+
+## Estatística descritiva
+```{r, fig.height = 3, fig.width = 7}
+DF_neg <- data.frame(var=c(rep("NegAFF_T1", nrow(DF_LGM)), rep("NegAFF_T2", nrow(DF_LGM)), 
+                           rep("NegAFF_T3", nrow(DF_LGM)), rep("NegAFF_T4", nrow(DF_LGM))), 
+                     value = c(DF_LGM$NegAFF_T1, DF_LGM$NegAFF_T2, DF_LGM$NegAFF_T3, DF_LGM$NegAFF_T4))
+
+ggplot(DF_neg, aes(x=var,y=value, fill=var)) +
+  geom_boxplot() +
+  geom_jitter(width=0.08, alpha=0.03)
+```
+
+## As funções **growth()** e **sem()** (OPCIONAL)  
+O lavaan disponibiliza a função **growth()** para estimação de modelos de crescimento latente (LGC)  
+  - Esta função deixará de fazer parte do pacote em breve  
+  - As funções **sem()** e **growth()** são muito semelhantes   
+      - Ao contrario da função **sem()**, na função **growth()** assume automaticamente *meanstructure=TRUE*, fixa a zero os intercepts observados e estima livremente as médias da variáveis latentes. 
+
+A especificação e estimação de um modelo LGC com quatro ocasiões de medida usando a função **growth()** é feita da seguinte forma:
+
+```{r}
+modelo.8 <- "
+## média inicial e trajetória linear de crescimento
+intercept =~ 1*NegAFF_T1 + 1*NegAFF_T2 + 1*NegAFF_T3 + 1*NegAFF_T4
+slope =~ 0*NegAFF_T1 + 1*NegAFF_T2 + 2*NegAFF_T3 + 3*NegAFF_T4
+"
+```
+
+## As funções **growth()** e **sem()** (OPCIONAL)  
+Intercept definido fixando os seus loadings a 1 nos quatro momentos de avaliação  
+
+Slope é definida fixando a 0, 1, 2 e 3  
+
+A estimação do modelo é feita da seguinte forma:
+```{r}
+fit.8 <- growth(modelo.8, data=DF_LGM)
+```
+```{r, eval=FALSE}
+summary(fit.8, standardized=T, fit.measures=T)
+```
+
+## As funções **growth()** e **sem()** (OPCIONAL)  
+O mesmo modelo é estimado com a função **sem()**:  
+```{r}
+modelo.8.1 <- "
+intercept =~ 1*NegAFF_T1 + 1*NegAFF_T2 + 1*NegAFF_T3 + 1*NegAFF_T4
+slope =~ 0*NegAFF_T1 + 1*NegAFF_T2 + 2*NegAFF_T3 + 3*NegAFF_T4
+
+## fixar os intercepts das variáveis observadas a zero e 
+## libertar as médias latentes (intecept e crescimento médio)
+intercept ~ 1
+slope ~ 1
+NegAFF_T1 ~ 0*1
+NegAFF_T2 ~ 0*1
+NegAFF_T3 ~ 0*1
+NegAFF_T4 ~ 0*1
+"
+```  
+*Explicitar a estimação livre das médias latentes e fixar os intercept observados a 0*  
+```{r}
+fit.8.1 <- sem(modelo.8.1, data=DF_LGM)
+```
+```{r, eval=FALSE}
+summary(fit.8.1, standardized=T, fit.measures=T)
+```
+
+## As funções **growth()** e **sem()** (OPCIONAL)  
+Os dois modelos estimados pelas funções **growth()** e **sem()** são idênticos   
+```{r}
+summary(compareFit(fit.8, fit.8.1, nested=FALSE))
+```
+Tal como recomendado, iremos usar a função **sem()** nos exemplos que se seguem  
+
+## Step 1: Modelo não condicionado  
+O teste de um modelo de LGC frequentemente inicia-se com a avaliação de um modelo não condicionado  
+    - Este modelo não impõe qualquer trajetória de crescimento sendo usado como modelo de base  
+    
+```{r, fig.height = 3.5, fig.width = 6, echo=F}
+modelo.9 <- "
+## média inicial e trajetória linear de crescimento
+intercept =~ 1*NegAFF_T1 + 1*NegAFF_T2 + 1*NegAFF_T3 + 1*NegAFF_T4
+slope =~ 0*NegAFF_T1 + NegAFF_T2 + NegAFF_T3 + 1*NegAFF_T4
+
+## intercepts e médias
+intercept ~ 1
+slope ~ 1
+NegAFF_T1 ~ 0*1
+NegAFF_T2 ~ 0*1
+NegAFF_T3 ~ 0*1
+NegAFF_T4 ~ 0*1
+"
+fit.9 <- sem(modelo.9, data=DF_LGM, meanstructure=TRUE)
+# diagrama do modelo
+semPaths(fit.9, whatLabels="est", title = FALSE, curvePivot = TRUE, layout="tree", intercepts=T, rotation=2, nCharNodes=3, sizeMan=10, sizeLat= 7, residuals=T, exoVar=F, edge.color=9)
+title("Modelo de Crescimento Latente não Condicionado", line = 3)
+```
+
+## Step 1: Modelo não condicionado  
+Para especificar este modelo, apenas fixar dois dos quatro loadings da slope, libertando os restantes  
+
+```{r}
+modelo.9 <- "
+## média inicial e trajetória linear de crescimento
+intercept =~ 1*NegAFF_T1 + 1*NegAFF_T2 + 1*NegAFF_T3 + 1*NegAFF_T4
+slope =~ 0*NegAFF_T1 + NegAFF_T2 + NegAFF_T3 + 1*NegAFF_T4
+
+## intercepts e médias
+intercept ~ 1
+slope ~ 1
+NegAFF_T1 ~ 0*1
+NegAFF_T2 ~ 0*1
+NegAFF_T3 ~ 0*1
+NegAFF_T4 ~ 0*1
+"
+fit.9 <- sem(modelo.9, data=DF_LGM, meanstructure=TRUE)
+```
+
+```{r, eval=FALSE}
+#sumário do modelo
+summary(fit.9, standardized=TRUE, fit.measures=TRUE, rsquare=TRUE)
+```
+
+## Step 1: Modelo não condicionado  
+Este modelo não condicionado permite explorar a forma da trajetória de crescimento
+
+*Se analisarmos os loadings (não estandardizados) da slope nos diferentes momentos, podemos inferir uma trajetória relativamente linear: 0 em t1, .27 em t2, .70 em t3 e 1 em t4.*
+
+Podemos confirmar a linearidade da trajetória, testando o ajustamento do **modelo condicionado** aos dados
+
+## STEP 2: Modelo condicionado  
+O modelo condicionado impõem uma slope linear, fixando todos os seus loadings a 0, 1, 2 e 3    
+```{r, echo=F, fig.height = 4.5, fig.width = 7}
+modelo.10 <- "
+## média inicial e trajetória linear de crescimento
+intercept =~ 1*NegAFF_T1 + 1*NegAFF_T2 + 1*NegAFF_T3 + 1*NegAFF_T4
+slope =~ 0*NegAFF_T1 + 1*NegAFF_T2 + 2*NegAFF_T3 + 3*NegAFF_T4
+
+## intercepts e médias
+intercept ~ 1
+slope ~ 1
+NegAFF_T1 ~ 0*1
+NegAFF_T2 ~ 0*1
+NegAFF_T3 ~ 0*1
+NegAFF_T4 ~ 0*1
+"
+fit.10 <- sem(modelo.10, data=DF_LGM, meanstructure=TRUE)
+# diagrama do modelo
+semPaths(fit.10, whatLabels="est", title = FALSE, curvePivot = TRUE, layout="tree", intercepts=T, rotation=2, nCharNodes=3, sizeMan=10, sizeLat= 7, residuals=T, exoVar=F, edge.color=9)
+title("Modelo de Crescimento Latente Condicionado", line = 3)
+```
+
+## STEP 2: Modelo condicionado  
+```{r}
+modelo.10 <- "
+## média inicial e trajetória linear de crescimento
+intercept =~ 1*NegAFF_T1 + 1*NegAFF_T2 + 1*NegAFF_T3 + 1*NegAFF_T4
+slope =~ 0*NegAFF_T1 + 1*NegAFF_T2 + 2*NegAFF_T3 + 3*NegAFF_T4
+
+## intercepts e médias
+intercept ~ 1
+slope ~ 1
+NegAFF_T1 ~ 0*1
+NegAFF_T2 ~ 0*1
+NegAFF_T3 ~ 0*1
+NegAFF_T4 ~ 0*1
+"
+fit.10 <- sem(modelo.10, data=DF_LGM, meanstructure=TRUE)
+```
+
+## STEP 2: Modelo condicionado  
+```{r, eval=FALSE}
+#sumário do modelo
+summary(fit.10, standardized=TRUE, fit.measures=TRUE, rsquare=TRUE)
+```  
+
+Este modelo pode ser retido uma vez que não difere significativamente do modelo não condicionado, sendo mais mais parcimonioso  
+```{r}
+anova(fit.9, fit.10)
+```
+
+## Interpretação dos resultados  
+Pelo sumário do modelo anterior verificamos que: 
+  
+  - Tanto o intercept (*b* = 2.09) como a slope (*b* = -.10) apresentam valores significativos  
+    - *Nível médio de afeto negativo de 2.09 em T0 com decréscimo linear a uma taxa média de -.10 (por ano)*    
+  
+  - As variâncias do intercept (*b* = .27) e slope (*b* = .01) também são ambas significativas  
+    - Existência de variabilidade entre indivíduos, tanto no que toca ao níveis iniciais de afeto negativo como às trajetórias de mudança   
+    
+    
+## Interpretação dos resultados  
+Correlação significativa entre o intercept e a slope b (*r* = -.71).  
+  - Com **slope positiva** uma correlação negativa sugere que sujeitos com níveis iniciais mais elevados de afeto apresentam um crescimento menor ao longo do tempo.  
+  - Com **slope negativa** (há um decréscimo ao longo do tempo), uma **correlação negativa** com o intercept indica que:  
+    - Scores de pessoas com níveis *iniciais de afeto mais elevados* tendem a *decrescer mais* ao longo do tempo (slope mais negativa).  
+    - Scores de pessoas com níveis *iniciais de afeto mais baixo*s deverão *decrescer menos* ao longo do tempo (slope menos negativa).  
+  
+Podemos também interpretar o R-square.  
+  - Ligeiro decréscimo da variância explicada dos indicadores pelo fator (slope) ao longo do tempo 
+
+## LGC: Constrangimentos ao modelo  
+É prática frequente impor constrangimentos ao modelo com o objetivo de aumentar a sua parcimónia.    
+  - Igualar os resíduos dos indicadores - correspondência com pressuposto da *homogeneidade das variâncias* nos modelos clássicos de regressão.
+
+```{r, fig.height = 4, fig.width = 6, echo=FALSE}
+modelo.10.1 <- "
+## média inicial e trajetória linear de crescimento
+intercept =~ 1*NegAFF_T1 + 1*NegAFF_T2 + 1*NegAFF_T3 + 1*NegAFF_T4
+slope =~ 0*NegAFF_T1 + 1*NegAFF_T2 + 2*NegAFF_T3 + 3*NegAFF_T4
+
+## intercepts e médias
+intercept ~ 1; slope ~ 1
+NegAFF_T1 ~ 0*1; NegAFF_T2 ~ 0*1; NegAFF_T3 ~ 0*1; NegAFF_T4 ~ 0*1
+
+## Fixar as variâncias residuais ao mesmo valor
+NegAFF_T1 ~~ res1*NegAFF_T1; NegAFF_T2 ~~ res1*NegAFF_T2
+NegAFF_T3 ~~ res1*NegAFF_T3; NegAFF_T4 ~~ res1*NegAFF_T4
+"
+fit.10.1 <- sem(modelo.10.1, data=DF_LGM, meanstructure=TRUE)
+
+# diagrama do modelo
+semPaths(fit.10.1, whatLabels="est", title = FALSE, curvePivot = TRUE, layout="tree", intercepts=T, rotation=2, nCharNodes=3, sizeMan=10, sizeLat= 7, residuals=T, exoVar=F, edge.color=9)
+title("Modelo de Crescimento Latente com Constrangimentos", line = 3)
+```
+
+## LGC: Constrangimentos ao modelo  
+```{r, eval=FALSE}
+modelo.10.1 <- "
+## média inicial e trajetória linear de crescimento
+intercept =~ 1*NegAFF_T1 + 1*NegAFF_T2 + 1*NegAFF_T3 + 1*NegAFF_T4
+slope =~ 0*NegAFF_T1 + 1*NegAFF_T2 + 2*NegAFF_T3 + 3*NegAFF_T4
+
+## intercepts e médias
+intercept ~ 1
+slope ~ 1
+NegAFF_T1 ~ 0*1
+NegAFF_T2 ~ 0*1
+NegAFF_T3 ~ 0*1
+NegAFF_T4 ~ 0*1
+
+## Fixar as variâncias residuais ao mesmo valor
+NegAFF_T1 ~~ res1*NegAFF_T1
+NegAFF_T2 ~~ res1*NegAFF_T2
+NegAFF_T3 ~~ res1*NegAFF_T3
+NegAFF_T4 ~~ res1*NegAFF_T4
+"
+fit.10.1 <- sem(modelo.10.1, data=DF_LGM, meanstructure=TRUE)
+
+#sumário do modelo
+summary(fit.10.1, standardized=TRUE, fit.measures=TRUE, rsquare=TRUE)
+
+```
+
+## LGC: Constrangimentos ao modelo  
+Os resultados da função **compareFit()** indicam que os dois modelos (com e sem constrangimentos) diferem significativamente no seu ajustamento aos dados  
+  - O ajustamento piora com os constrangimentos    
+```{r}
+summary(compareFit(fit.10, fit.10.1))
+```
+
+## LGC: Visualização (OPCIONAL)  
+As seguintes linhas de código são opcionais e servem para visualizar os valores individuais e médios estimados pelo modelo.  
+```{r}
+DF_FIT.10.1 <- as.data.frame(cbind(1:nrow(DF_LGM), predict(fit.10.1)))
+names(DF_FIT.10.1)[1] <- "ID"
+DF_FIT.10.1$ID <- rep("subjets", nrow(DF_FIT.10.1))
+DF_FIT.10.1.sel <- DF_FIT.10.1[sample(1:nrow(DF_FIT.10.1),100), ]
+
+DF_coef_fit.10.1 <- as.data.frame(matrix(coef(fit.10.1)[1:2], ncol=2, byrow=TRUE))
+DF_coef_fit.10.1 <- as.data.frame(c("Average Est", DF_coef_fit.10.1), col.names=names(DF_FIT.10.1))
+
+```
+
+## LGC: Visualização (OPCIONAL)  
+```{r, fig.height = 4, fig.width = 6}
+ggplot() + 
+  scale_y_continuous(limits=c(0,4)) + 
+  geom_abline(data= DF_FIT.10.1.sel, aes(slope=slope, intercept=intercept), colour="grey") +
+  geom_abline(data= DF_coef_fit.10.1, aes(slope=slope, intercept=intercept, colour="estimate"), size=1) +
+  theme(legend.title = element_blank()) +
+  scale_x_continuous("TIME", limits=c(0,10)) 
+```
+
+## LGC: Modelo de crescimento com covariáveis fixas no tempo  
+Os modelos LGC permitem incluir covariáveis para explicar a variância do intercept e da slope  
+No modelo seguinte estimamos o efeito de 3 variáveis dicotómicas:  
+  - "gender_male";  
+  - "Black";  
+  - "Hispanic";  
+  
+## LGC: Modelo de crescimento com covariáveis fixas no tempo  
+```{r, fig.height = 5, fig.width = 8, echo = FALSE}
+modelo.11 <- "
+## média inicial e trajetória linear de crescimento
+intercept =~ 1*NegAFF_T1 + 1*NegAFF_T2 + 1*NegAFF_T3 + 1*NegAFF_T4
+slope =~ 0*NegAFF_T1 + 1*NegAFF_T2 + 2*NegAFF_T3 + 3*NegAFF_T4
+
+## intercepts e médias
+intercept ~ 1
+slope ~ 1
+NegAFF_T1 ~ 0*1
+NegAFF_T2 ~ 0*1
+NegAFF_T3 ~ 0*1
+NegAFF_T4 ~ 0*1
+
+## Fixar as variâncias residuais ao mesmo valor
+NegAFF_T1 ~~ res1*NegAFF_T1; NegAFF_T2 ~~ res1*NegAFF_T2
+NegAFF_T3 ~~ res1*NegAFF_T3; NegAFF_T4 ~~ res1*NegAFF_T4
+
+# Covariáveis
+intercept ~ gender_male + Black + Hispanic
+slope ~ gender_male + Black + Hispanic
+"
+fit.11 <- sem(modelo.11, data=DF_LGM, meanstructure=TRUE)
+
+# diagrama do modelo
+semPaths(fit.11, whatLabels="std", title = FALSE, curvePivot = TRUE, layout="tree", intercepts=T, rotation=2, nCharNodes=3, sizeMan=10, sizeLat= 7, residuals=T, exoVar=F, edge.color=9)
+title("LGC model com Covariáveis Fixas", line = 3)
+```  
+
+## LGC: Modelo de crescimento com covariáveis fixas no tempo
+```{r}
+modelo.11 <- "
+## média inicial e trajetória linear de crescimento
+intercept =~ 1*NegAFF_T1 + 1*NegAFF_T2 + 1*NegAFF_T3 + 1*NegAFF_T4
+slope =~ 0*NegAFF_T1 + 1*NegAFF_T2 + 2*NegAFF_T3 + 3*NegAFF_T4
+
+## intercepts e médias
+intercept ~ 1; slope ~ 1
+NegAFF_T1 ~ 0*1; NegAFF_T2 ~ 0*1; NegAFF_T3 ~ 0*1; NegAFF_T4 ~ 0*1
+
+## Fixar as variâncias residuais ao mesmo valor
+NegAFF_T1 ~~ res1*NegAFF_T1; NegAFF_T2 ~~ res1*NegAFF_T2; 
+NegAFF_T3 ~~ res1*NegAFF_T3; NegAFF_T4 ~~ res1*NegAFF_T4
+
+# Covariáveis
+intercept ~ gender_male + Black + Hispanic
+slope ~ gender_male + Black + Hispanic
+"
+fit.11 <- sem(modelo.11, data=DF_LGM, meanstructure=TRUE)
+```  
+
+## LGC: Modelo de crescimento com covariáveis fixas no tempo
+
+```{r, eval=FALSE}
+#sumário do modelo
+summary(fit.11, fit.measures=TRUE, rsquare=TRUE)
+```
+
+Os resultados sugerem efeitos significativos de género e etnia (afro-americana) tanto no intercept como na slope.  
+  - Homens com níveis iniciais mais elevados de afeto negativo quando comparados com as mulheres.  
+  - Quando comparados com outras etnias, afro-americanos apresentam níveis iniciais mais elevados de afeto negativo, seguido de um menor decréscimo ao longo do tempo.  
+
+## LGC: Modelo de crescimento linear multivariado   
+Um exemplo adicional das potencialidade analíticas dos modelos de crescimento latente consiste na possibilidade de estimar trajetórias de crescimento de diferentes variáveis  
+  
+  - No modelo seguintes, para além do afeto negativo, estimamos a trajetória de crescimento de outra variável, afeto positivo.  
+
+
+## LGC: Modelo de crescimento linear multivariado  
+```{r, fig.height = 6, fig.width = 9, echo = FALSE}
+modelo.12 <- "
+## média inicial e trajetória linear de crescimento
+Neg_intercept =~ 1*NegAFF_T1 + 1*NegAFF_T2 + 1*NegAFF_T3 + 1*NegAFF_T4
+Neg_slope =~ 0*NegAFF_T1 + 1*NegAFF_T2 + 2*NegAFF_T3 + 3*NegAFF_T4
+
+Pos_intercept =~ 1*PosAFF_T1 + 1*PosAFF_T2 + 1*PosAFF_T3 + 1*PosAFF_T4
+Pos_slope =~ 0*PosAFF_T1 + 1*PosAFF_T2 + 2*PosAFF_T3 + 3*PosAFF_T4
+
+## intercepts e médias
+Neg_intercept ~ 1
+Neg_slope ~ 1
+NegAFF_T1 ~ 0*1
+NegAFF_T2 ~ 0*1
+NegAFF_T3 ~ 0*1
+NegAFF_T4 ~ 0*1
+
+Pos_intercept ~ 1
+Pos_slope ~ 1
+PosAFF_T1 ~ 0*1
+PosAFF_T2 ~ 0*1
+PosAFF_T3 ~ 0*1
+PosAFF_T4 ~ 0*1
+
+## Fixar as variâncias residuais ao mesmo valor
+NegAFF_T1 ~~ res1*NegAFF_T1; NegAFF_T2 ~~ res1*NegAFF_T2
+NegAFF_T3 ~~ res1*NegAFF_T3; NegAFF_T4 ~~ res1*NegAFF_T4
+
+PosAFF_T1 ~~ res2*PosAFF_T1; PosAFF_T2 ~~ res2*PosAFF_T2
+PosAFF_T3 ~~ res2*PosAFF_T3; PosAFF_T4 ~~ res2*PosAFF_T4
+
+"
+fit.12 <- sem(modelo.12, data=DF_LGM, meanstructure=TRUE)
+
+# diagrama do modelo
+semPaths(fit.12, whatLabels="std", title = FALSE, curvePivot = TRUE, layout="tree", intercepts=T, rotation=2, nCharNodes=3, sizeMan=10, sizeLat= 7, residuals=T, exoVar=F, edge.color=9)
+title("Modelo de Crescimento Latente Multivariado", line = 3)
+
+#sumário do modelo
+summary(fit.12, standardized=TRUE, fit.measures=TRUE, rsquare=TRUE)
+```
+
+## LGC: Modelo de crescimento linear multivariado  
+```{r}
+modelo.12 <- "
+## média inicial e trajetória linear de crescimento
+Neg_intercept =~ 1*NegAFF_T1 + 1*NegAFF_T2 + 1*NegAFF_T3 + 1*NegAFF_T4
+Neg_slope =~ 0*NegAFF_T1 + 1*NegAFF_T2 + 2*NegAFF_T3 + 3*NegAFF_T4
+Pos_intercept =~ 1*PosAFF_T1 + 1*PosAFF_T2 + 1*PosAFF_T3 + 1*PosAFF_T4
+Pos_slope =~ 0*PosAFF_T1 + 1*PosAFF_T2 + 2*PosAFF_T3 + 3*PosAFF_T4
+
+## médias
+Neg_intercept ~ 1; Neg_slope ~ 1
+Pos_intercept ~ 1; Pos_slope ~ 1
+
+# intercepts 
+NegAFF_T1 ~ 0*1; NegAFF_T2 ~ 0*1; NegAFF_T3 ~ 0*1; NegAFF_T4 ~ 0*1; 
+PosAFF_T1 ~ 0*1; PosAFF_T2 ~ 0*1; PosAFF_T3 ~ 0*1; PosAFF_T4 ~ 0*1
+
+## Fixar as variâncias residuais ao mesmo valor
+NegAFF_T1 ~~ res1*NegAFF_T1; NegAFF_T2 ~~ res1*NegAFF_T2
+NegAFF_T3 ~~ res1*NegAFF_T3; NegAFF_T4 ~~ res1*NegAFF_T4
+PosAFF_T1 ~~ res2*PosAFF_T1; PosAFF_T2 ~~ res2*PosAFF_T2
+PosAFF_T3 ~~ res2*PosAFF_T3; PosAFF_T4 ~~ res2*PosAFF_T4
+"
+fit.12 <- sem(modelo.12, data=DF_LGM, meanstructure=TRUE)
+```
+
+## LGC: Modelo de crescimento linear multivariado  
+```{r, eval=FALSE}
+#sumário do modelo
+summary(fit.12, standardized=TRUE, fit.measures=TRUE, rsquare=TRUE)
+```
+
+*Este modelo estima os intercepts e slopes médias e suas variâncias para afeto negativo e positivo, bem como a correlação entre as trajetórias das duas variáveis*  
+  
+  - Correlação negativa entre os níveis médios iniciais de afeto negativo e níveis médios iniciais de afeto positivo  
+  
+  
