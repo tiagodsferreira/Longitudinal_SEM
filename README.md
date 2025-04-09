@@ -1,24 +1,25 @@
-# Análise de dados longitudinais
-Bem-vindos ao curso “Análise de dados longitudinais - Parte 3”!!!
+# Análise Fatorial Confirmatória (6h)
 
-Este curso está dividido em 3 parte:
-- Parte 1: “Breve introdução ao R”;
-- Parte 2: “O pacote lavaan para equações estruturais”;
-- Parte 3: “Modelos longitudinais”.
+Os materiais neste repositório servem de apoio a um módulo pedagógico sobre “Análise de dados longitudinais, (LGC) com aplicação em R. 
+Este curso tem a duração estimada de 6h, sendo composto por momentos expositivos e por um momentos de aplicação das aprendizagem.
 
-Neste arquivo encontram-se todos os materiais de apoio à PARTE 3.
-Poderão descarregar todos os ficheiros deste arquivo através do menu "Code" ("Download ZIP")
+Este curso está dividido em 2 parte:
+1. Invariância de Medida (MI) longitudinal
+2. Modelos de Crescimento Latente (LGC)
+
+Poderão descarregar todos os ficheiros deste arquivo:
+
+[![Download Material](https://img.shields.io/badge/Download-Material-blue?style=for-the-badge&logo=github)](https://github.com/tiagodsferreira/Longitudinal_SEM/archive/refs/heads/main.zip)
+
 
 ## Pasta "LongSEM_Data"
-Contém as bases de dados usadas na Parte 3
+Contém as bases de dados usadas no módulo pedagógico
 
 ## Pasta "LongSEM_Pres"
-Contém apresentação com conteúdos referentes à Parte 3
+Contém apresentação com conteúdos referentes ao módulo pedagógico
 
-## Pasta "LongSEM_Code"
-Ficheiro sintaxe R com código utilizado na apresentação
 
-## Pasta "R crash course-Exer"
-Contém exercício sobre conteúdos abordados nas PARTES 2 e 3
+[![Open Materials](https://img.shields.io/badge/Open-Materials-green?style=for-the-badge&logo=open-access)](https://github.com/tiagodsferreira/Longitudinal_SEM/)
 
-### Caso se justifique acrescentarei a este arquivo outros materiais necessários ao workshop.
+
+[![CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-blue?style=for-the-badge&logo=creativecommons)](https://creativecommons.org/licenses/by/4.0/)
