@@ -45,44 +45,35 @@ knitr::opts_chunk$set(
 # AGENDA \| Modelos de Equações Estruturais Longitudinais {.smaller}
 
 ::: gray2
-- **Análise fatorial confirmatória com dados longitudinais**  
+- **Análise Fatorial Confirmatória (CFA) com dados longitudinais**  
 - **Invariância de Medida (MI) longitudinal**
 - **Exercício prático - Parte 1**  
 - **Modelos de Crescimento Latente (LGC)**  
 - **Exercício prático - Parte 2**  
 :::
 
-# Análise fatorial confirmatória com dados longitudinais
+# CFA com dados longitudinais
 
 ## CFA e Modelo de medida (recap)
-A CFA permite testar se um modelo de medida pré-existente se ajusta aos nossos dados  
+A CFA permite avaliar se um determinado modelo de medida teórico se ajusta a um conjunto de dados  
 
-- Este modelo representa as relações entre uma ou mais variáveis latentes ou fatores e os seus indicadores observados   
+- O modelo CFA representa as relações entre uma ou mais variáveis latentes ou fatores e os seus indicadores observados   
   - A CFA foi abordada anteriormente com dados transversais
-  - Neste módulo, vamos ver como aplicar a CFA a dados longitudinais
-
-
-## Exemplo: Dois Fatores, Seis Indicadores
-- **Matriz de Covariância Implícita:**
-
-```{r, echo=FALSE, fig.width=10, fig.height=7, out.width="80%"}
+  
+```{r, echo=FALSE, fig.width=10, fig.height=7, out.width="40%"}
 knitr::include_graphics("G:\\My Drive\\FPCEUP\\AtividadeDocente\\ConfirmatoryFactorAnalysis\\files\\figures\\cfamodel.png")
 ```
 
+### A CFA longitudinais é apenas uma extensão deste modelo
+s
+
 
 ## CFA Multigrupo
-### CFA multigrupo permite avaliar a medida em um certo um modelo de medida se ajusta a subgrupos da população
-  - ex.: género, coortes, contextos culturais
+### CFA multigrupo permite avaliar o ajustamento de modelo de medida a diferentes subgrupos da população (ex.: género, coortes, contextos culturais)
+  
+### A CFA multigrupo pode ser generalizada a longitudinais, correspondendo os grupos a diferentes momentos de avaliação\
 
-- Utiliza-se para avaliar **invariância de medida**\  
-- Essencial para comparações válidas entre grupos\
-- A CFA longitudinal é uma extensão da CFA multigrupo\
-
-
-## CFA com dados longitudinais
-### Extensão do modelo CFA multigrupo  
-
-```{r, echo=FALSE, fig.width=10, fig.height=7, out.width="100%"}
+```{r, echo=FALSE, fig.width=10, fig.height=7, out.width="70%"}
 knitr::include_graphics("G:\\My Drive\\FPCEUP\\AtividadeDocente\\MeasurementInvariance\\figures\\MI_step0.png")
 ```
 
@@ -91,8 +82,7 @@ knitr::include_graphics("G:\\My Drive\\FPCEUP\\AtividadeDocente\\MeasurementInva
 
 ### A CFA longitudinal permite testar se a estrutura de um modelo de medida se mantém estável ao longo do tempo
 
-- Cada momento de avaliação é tratado como um "grupo" no modelo multigrupo  
-- Avalia se os construtos latentes são **medidos de forma consistente ao longo do tempo**  
+### Avalia se os construtos latentes são **medidos de forma consistente ao longo do tempo**  
 - Essencial para análises longitudinais como:
   - Modelos de crescimento latente (LGM)
   - Modelos de painel
@@ -223,9 +213,9 @@ knitr::include_graphics("G:\\My Drive\\FPCEUP\\AtividadeDocente\\Longitudinal_SE
 ```
 
 
-## Modelo CFA longitudinal (lavaan)
-A seguinte sintaxe especifica o modelo:  
-  - Como anteriormente, as VL são definidas pelo operador **=~**
+## Modelo CFA longitudinal
+A seguinte sintaxe especifica o modelo no lavaan:  
+
 ```{r}
 modelo.7 <- "
 # Definir variáveis latentes para os 3 momentos
@@ -270,8 +260,7 @@ title("Análise Fatorial Confirmatória", line = 2)
 ### Teste formal do pressuposto de equivalência entre medições\
 - *Será que os construtos em análise são comparáveis entre condições?*
 
-### Geralmente conduzida por meio da **CFA Multigrupo** (Meredith, 1993)
-- Neste contexto, parâmetros podem ser fixados como iguais entre grupos
+### Geralmente conduzida por meio de comparação de modelos encaixados
 
 ### Níveis de MI 
 (1) **Invariância Configural** - os grupos interpretam o construto de forma semelhante;  
@@ -288,9 +277,9 @@ knitr::include_graphics("G:\\My Drive\\FPCEUP\\AtividadeDocente\\MeasurementInva
 
 ## Comparação de modelos encaixados
 
-### O Likelihood Ratio Test (**LRT**) é um teste estatístico para comparar dois modelos encaixados
+### Teste formal: Likelihood Ratio Test (**LRT**) para modelos encaixados
 - avalia se **o modelo mais restrito (com menos parâmetros) se ajusta aos dados significativamente pior do que o modelo menos restrito**
-- permite testar formalmente diferenças no ajustadamento de modelos encaixados
+
 
 ###  Outras métricas de comparação de modelos (Cheung & Rensvold, 2002)
   - **ΔCFI < 0.01**
@@ -302,8 +291,7 @@ knitr::include_graphics("G:\\My Drive\\FPCEUP\\AtividadeDocente\\MeasurementInva
 
 ### Refere-se à estabilidade das propriedades psicométricas de um instrumento ao longo do tempo
 
-### Garante que **mudanças nos valores da variável latentes** refletem mudanças reais no construto    
-*e não alterações na forma como o construto é medido*
+### Garante que **mudanças nos valores da variável latentes** refletem mudanças reais no construto *e não alterações na forma como o construto é medido*
   
 ### Baseia-se na lógica da CFA multigrupo, onde os "grupos" são os diferentes **momentos de avaliação**
 
@@ -312,42 +300,26 @@ knitr::include_graphics("G:\\My Drive\\FPCEUP\\AtividadeDocente\\MeasurementInva
 ## Porquê testar invariância longitudinal?
 ### Sem invariância, não podemos comparar **valores fatoriais**, **tendências de crescimento** ou **efeitos longitudinais** de forma válida 
 
-### Testar invariância permite:  
 - Avaliar estabilidade do construto\  
 - Identificar mudanças reais nos participantes\  
 - Garantir a validade de modelos de crescimento e trajetórias latentes\
 
-### Será o modelo de medida equivalente entre grupos ou momentos de avaliação?   
-*modelos longitudinais assumem o pressuposto da invariância de medida*   
 
 
 
 ## Níveis de Invariância Longitudinal
 
-Comparação de modelos aninhados, com um número crescente de parâmetros constrangidos:    
-  1. *Configuracional* - Mesma estrutura fatorial ao longo do tempo    
-  2. *Fraca ou Métrica* - Pesos fatoriais (loadings) constantes    
-  3. *Forte ou Escalar* - Loadings e interceptos constantes  
-  4. *Estrita* - loadings, interceptos e resíduos dos itens constantes  
+### 1. *Configuracional* - Mesma estrutura fatorial ao longo do tempo\    
+### 2. *Fraca ou Métrica* - Pesos fatoriais (loadings) constantes\    
+### 3. *Forte ou Escalar* - Loadings e interceptos constantes\ 
+### 4. *Estrita* - loadings, interceptos e resíduos dos itens constantes\  
 
-- **Estes níveis são testados sequencialmente usando CFA multigrupo.** 
-  - *O modelo mais simples serve de base ao teste da MI*
+- **Estes níveis são comparados sequencialmente** 
+  - Primeiro modelo livre (configural)\
+  - Depois adicionam-se restrições métricas, escalares, etc.\
+  - Avaliamos mudança no ajuste do modelo: $\Delta{CFI}$, $\Delta{RMSEA}$, $\Delta\chi^2$\
 
-
-
-## MI longitudinal passo a passo?
-
-### Usamos CFA multigrupo com **restrições progressivas**:\
-- Primeiro modelo livre (configural)\
-- Depois adicionam-se restrições métricas, escalares, etc.\
-
-### Avaliamos mudança no ajuste do modelo:\
-- $\Delta{CFI}$, $\Delta{RMSEA}$, $\Delta\chi^2$\
-
-### Ferramentas comuns:\
-- lavaan em R\
-- Mplus\
-- AMOS\
+### Ferramentas comuns: lavaan em R; Mplus; AMOS
 
 
 
@@ -355,21 +327,22 @@ Comparação de modelos aninhados, com um número crescente de parâmetros const
 
 Existem várias formas de implementar a MI longitudinal no lavaan.  
 
-### Definindo o modelo de forma explícita e depois adicionando as restrições necessárias para cada nível de invariância (recomendada)
+### Definindo explícita dos modelos (recomendada)
 -  Esta abordagem oferece controle  sobre o processo de modelagem, permitindo especificar manualmente as restrições necessárias para cada nível de invariância.
 
-### Através da função **measEq.syntax()** do pacote semTools, que permite especificar os modelos de mais automática
+### Através da função **measEq.syntax()** do pacote semTools
 - Esta função automatiza a geração da sintaxe do modelo para testar diferentes níveis de invariância, simplificando o processo e reduzindo a possibilidade de erros manuais.
 
-## Pacotes necessárias
+
+
+## Modelo Configuracional - especificação
+
+### Pacotes necessários
 ```{r}
 library(lavaan) # se necessário: install.packages("lavaan")
 library(semTools) # se necessário: install.packages("semTools")
 library(semPlot) # se necessário: install.packages("semPlot")
 ```
-
-
-## Modelo Configuracional - especificação
 
 ```{r}
 modelo.conf <- "
@@ -411,8 +384,6 @@ fitMeasures(fit.conf, c("chisq.scaled", "df.scaled", "pvalue.scaled", "rmsea.rob
 
 
 ## IM Métrica - especificação
-### O modelo métrico é o mesmo que o configuracional, mas com a adição de restrições de igualdade nos loadings
-
 ```{r}
 modelo.metric <- "
 # Definir variáveis latentes para os 3 momentos
@@ -559,8 +530,7 @@ summary(compareFit(fit.conf, fit.metric, fit.scalar, fit.strict))
 
 ## Implementação alternativa com recurso à função "measEq.syntax() do pacote semTools 
 ### Permite testar MI de forma mais automática
-- Simplificação da sintaxe, reduzindo eventuais de erros de código
-  
+
 ### Modelo Base (invariância configuracional)
 ```{r, eval=F}
 model <- "
@@ -605,7 +575,7 @@ fitMeasures(configural.fit, c("chisq.scaled", "df.scaled", "pvalue.scaled", "rms
 ```
 
 ## IM Longitudinal
-### Invariância fraca ou métrica (iguais loadings)  
+### Invariância fraca ou métrica
 ```{r, eval=FALSE}
 syntax.scalar <- measEq.syntax(configural.model = syntax.config, data = DF_mood,
                                ID.fac = "std.lv", longFacNames = longFacNames,
@@ -619,7 +589,7 @@ summary(compareFit(configural.fit, metric.fit))
 ```
 
 ## IM Longitudinal
-### Invariância forte ou escalar (iguais loadings e intercepts)  
+### Invariância forte ou escalar
 ```{r, eval=FALSE}
 syntax.scalar <- measEq.syntax(configural.model = syntax.config, data = DF_mood,
                                ID.fac = "std.lv", longFacNames = longFacNames,
@@ -633,7 +603,7 @@ summary(compareFit(metric.fit, scalar.fit))
 ```
 
 ## IM Longitudinal
-### Invariância estrita (iguais loadings + intercepts + residuals)  
+### Invariância estrita
 ```{r, eval=FALSE}
 syntax.strict <- measEq.syntax(configural.model = syntax.config, data = DF_mood,
                                ID.fac = "std.lv", longFacNames = longFacNames,
@@ -679,7 +649,7 @@ Os modelos LGC respondem a três questões essenciais (Bollen & Curran, 2006):
 
 ## Modelos de crescimento latente
 Estes modelos procuram explicar uma variável em função do tempo, descrevendo:  
-  - Nível inicial e trajetória de mudança dos indivíduos  
+  - Nível inicial e trajetória de mudança médias dos indivíduos  
   - Diferenças inter-individuais nestes parâmetros
   
 Oferecem uma forma flexível de testar o valor preditivo de outras variáveis face às trajetórias   
