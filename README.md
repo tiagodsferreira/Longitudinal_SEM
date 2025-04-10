@@ -1,4 +1,4 @@
-# Análise Fatorial Confirmatória (6h)
+# Modelos de Equações Estruturais Longitudinais (6h)
 
 Os materiais neste repositório servem de apoio a um módulo pedagógico sobre “Análise de dados longitudinais, (LGC) com aplicação em R. 
 Este curso tem a duração estimada de 6h, sendo composto por momentos expositivos e por um momentos de aplicação das aprendizagem.
