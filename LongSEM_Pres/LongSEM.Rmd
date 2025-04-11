@@ -455,7 +455,7 @@ Neg_T1 ~ 0*1; Neg_T2 ~ NA*1; Neg_T3 ~ NA*1
 ```{r}
 fit.scalar <- cfa(modelo.scalar, data = DF_mood, std.lv = T, missing = "fiml", estimator="MLR")
 # summary(fit.scalar, standardized=TRUE, fit.measures=TRUE, rsquare = TRUE)
-all_params <- parameterEstimates(fit.conf, standardized = TRUE, rsquare = TRUE)
+all_params <- parameterEstimates(fit.scalar, standardized = TRUE, rsquare = TRUE)
 head(all_params[all_params$op == "~1", ])
 ```
 
@@ -503,7 +503,7 @@ NegAFF31 ~~ E2.3*NegAFF31; NegAFF32 ~~ E2.3*NegAFF32; NegAFF33 ~~ E2.3*NegAFF33
 ```{r}
 fit.strict <- cfa(modelo.strict, data = DF_mood, std.lv = T, missing = "fiml", estimator="MLR")
 #summary(fit.strict, standardized=TRUE, fit.measures=TRUE, rsquare = TRUE)
-all_params <- parameterEstimates(fit.conf, standardized = TRUE, rsquare = TRUE)
+all_params <- parameterEstimates(fit.strict, standardized = TRUE, rsquare = TRUE)
 head(all_params[all_params$op == "~~", ])
 ```
 
